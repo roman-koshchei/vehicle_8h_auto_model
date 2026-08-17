@@ -1,0 +1,22 @@
+metric: COCO
+num_classes: 1
+
+TrainDataset:
+  name: COCODataSet
+  image_dir: train/images
+  anno_path: train/annotations/instances.json
+  dataset_dir: ./vehicle_8h_auto_model/dataset/coco
+  data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd']
+  allow_empty: true
+
+EvalDataset:
+  name: COCODataSet
+  image_dir: valid/images
+  anno_path: valid/annotations/instances.json
+  dataset_dir: ./vehicle_8h_auto_model/dataset/coco
+  allow_empty: true
+
+TestDataset:
+  name: ImageFolder
+  anno_path: valid/annotations/instances.json
+  dataset_dir: ./vehicle_8h_auto_model/dataset/coco

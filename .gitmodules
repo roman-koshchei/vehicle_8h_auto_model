@@ -1,0 +1,3 @@
+[submodule "PaddleDetection"]
+	path = PaddleDetection
+	url = https://github.com/PaddlePaddle/PaddleDetection

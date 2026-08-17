@@ -1,0 +1,60 @@
+worker_num: 4
+eval_height: &eval_height 416
+eval_width: &eval_width 736
+eval_size: &eval_size [*eval_height, *eval_width]
+
+TrainReader:
+  mosaic_epoch: 100
+  mosaic_start_epoch: 0
+  sample_transforms:
+    - Decode: {}
+    - Mosaic:
+        prob: 0.5
+        input_dim: *eval_size
+        output_dim: *eval_size
+        degrees: [0, 0]
+        translate: [0.0, 0.0]
+        scale: [1.0, 1.0]
+        shear: [0, 0]
+        enable_mixup: true
+        mixup_prob: 0.25
+        mixup_scale: [0.75, 1.25]
+        enable_cutmix: true
+        cutmix_prob: 0.01
+    - RandomPerspectiveDet:
+        degrees: 0.0
+        translate: 0.2
+        scale: 0.25
+        shear: 4.0
+        perspective: 0.0002
+        target_size: *eval_size
+    - RandomHSV: {hgain: 0.015, sgain: 1.0, vgain: 0.4, is_bgr: false}
+    - RandomFlip: {}
+  batch_transforms:
+    - BatchRandomResize: {target_size: [[320, 576], [352, 640], [384, 672], [416, 736], [448, 800], [480, 864]], random_size: True, random_interp: True, keep_ratio: False}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+    - PadGT: {}
+  batch_size: 8
+  shuffle: true
+  drop_last: true
+  use_shared_memory: true
+  collate_batch: true
+
+EvalReader:
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: *eval_size, keep_ratio: False, interp: 2}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+  batch_size: 2
+
+TestReader:
+  inputs_def:
+    image_shape: [3, *eval_height, *eval_width]
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: *eval_size, keep_ratio: False, interp: 2}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+  batch_size: 1

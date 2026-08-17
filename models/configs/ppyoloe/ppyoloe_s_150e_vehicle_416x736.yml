@@ -1,0 +1,34 @@
+_BASE_:
+  [
+    "../datasets/vehicle.yml",
+    "../runtime.yml",
+    "./_base_/optimizer_150e.yml",
+    "./_base_/ppyoloe_plus_crn.yml",
+    "./_base_/ppyoloe_plus_reader_416x736.yml",
+  ]
+
+worker_num: 1
+log_iter: 20
+snapshot_epoch: 1
+weights: output/ppyoloe_s_150e_vehicle_416x736/model_final
+
+TrainReader:
+  sample_transforms:
+    - Decode: {}
+    - RandomDistort: {}
+    - RandomHSV: {hgain: 0.015, sgain: 0.7, vgain: 0.4, is_bgr: True}
+    - RandomExpand: {fill_value: [123.675, 116.28, 103.53]}
+    - RandomCrop: {}
+    - RandomFlip: {}
+  batch_size: 8
+  use_shared_memory: false
+
+EvalReader:
+  batch_size: 1
+
+TestReader:
+  batch_size: 1
+
+pretrain_weights: https://bj.bcebos.com/v1/paddledet/models/pretrained/ppyoloe_crn_s_obj365_pretrained.pdparams
+depth_mult: 0.33
+width_mult: 0.50

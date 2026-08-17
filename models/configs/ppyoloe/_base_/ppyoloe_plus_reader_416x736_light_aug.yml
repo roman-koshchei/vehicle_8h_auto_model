@@ -1,0 +1,47 @@
+worker_num: 4
+eval_height: &eval_height 416
+eval_width: &eval_width 736
+eval_size: &eval_size [*eval_height, *eval_width]
+
+TrainReader:
+  sample_transforms:
+    - Decode: {}
+    - RandomHSV: {hgain: 0.01, sgain: 0.35, vgain: 0.25, is_bgr: false}
+    - RandomGrayscale: {prob: 0.05}
+    - RandomFlip: {prob: 0.5}
+    - RandomPerspectiveDet:
+        prob: 0.35
+        degrees: 10.0
+        translate: 0.0
+        scale: [0.95, 1.05]
+        shear: 2.0
+        perspective: 0.0
+        target_size: *eval_size
+  batch_transforms:
+    - BatchRandomResize: {target_size: [[320, 576], [352, 640], [384, 672], [416, 736], [448, 800], [480, 864]], random_size: True, random_interp: True, keep_ratio: False}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+    - PadGT: {}
+  batch_size: 8
+  shuffle: true
+  drop_last: true
+  use_shared_memory: true
+  collate_batch: true
+
+EvalReader:
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: *eval_size, keep_ratio: False, interp: 2}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+  batch_size: 2
+
+TestReader:
+  inputs_def:
+    image_shape: [3, *eval_height, *eval_width]
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: *eval_size, keep_ratio: False, interp: 2}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+  batch_size: 1
