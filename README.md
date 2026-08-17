@@ -31,7 +31,7 @@ uv run merge_labels.py --labels-dir "./dataset/train/labels" --frames-dir "./dat
 Convert to COCO:
 
 ```bash
-uv run convert_to_coco.py --labels-dir "./dataset/train/labels" --images-dir "./dataset/train/frames" --destination-dir "./dataset/train/coco" --class-names "vehicle"
+uv run convert_to_coco.py --labels-dir "./dataset/train/labels" --images-dir "./dataset/train/frames" --destination-dir "./dataset/coco/train" --class-names "vehicle"
 ```
 
 ## Speedrun marks:
@@ -104,3 +104,38 @@ uv pip install --python ".venv\Scripts\python.exe" scikit-learn "numba==0.56.4"
 # sanity test: expect 7/7 OK
 .venv\Scripts\python.exe ppdet/modeling/tests/test_architectures.py
 ```
+
+## Model metrics
+
+Metrics for the v1 model (`models/v1.pdparams`, same weights as `output/best_model.pdparams`), computed with `eval_metrics.py`:
+
+```bash
+python eval_metrics.py --labels-dir "vehicle_8h_auto_model/dataset/eval/labels" --bbox-json "eval_bbox/bbox.json"
+```
+
+Assumptions: pinhole distance `distance = 4.5 m (car length) × focal_px / max(box w,h)`; FOV 84° diagonal = 76°H (README "FOV assumptions"), focal = 819.2 px; IoU ≥ 0.5 matching; 61 eval frames @2fps (30.5 s clip); N_frames = 61.
+
+Metrics definitions:
+
+- Detection rate = TP / (TP + FN)
+- Precision = TP / (TP + FP)
+- False alarms / min = FP × 60 / N_frames
+- Time to first detection = seconds
+
+| Metric                  | 0–200 m         | 200–400 m |
+| ----------------------- | --------------- | --------- |
+| Detection rate          | 0.771 (thr 0.3) | N/A       |
+| Precision               | 0.231 (thr 0.3) | N/A       |
+| False alarms / min      | 419 (thr 0.3)   | N/A       |
+| Time to first detection | 0.0 s (thr 0.3) | N/A       |
+
+GT distances span 16–80 m, so all ground truth falls in the 0–200 m band; the 200–400 m band has no GT samples and is reported as N/A. A PR curve across confidence thresholds (0.1 / 0.2 / 0.3 / 0.5) is available from the script.
+
+**Extra eval video:** [Drone footage of traffic on a highway interchange](https://www.pexels.com/video/drone-footage-of-traffic-on-a-highway-interchange-12477079/) (Pexels), downloaded to `dataset/eval/videos/12477079-hd_1280_720_30fps.mp4` (1280×720, ~30fps, 81.5 s); frames split at 2fps into `dataset/eval/frames/` (`12477079-hd_1280_720_30fps_%04d.png`, 163 frames).
+
+| Thr | Detection rate | Precision | FA/min  | Time to first detection (s) |
+| --- | -------------- | --------- | ------- | --------------------------- |
+| 0.1 | 0.892          | 0.054     | 2569.18 | 0.0                         |
+| 0.2 | 0.831          | 0.129     | 912.79  | 0.0                         |
+| 0.3 | 0.771          | 0.231     | 419.02  | 0.0                         |
+| 0.5 | 0.355          | 0.360     | 103.28  | 1.0                         |
