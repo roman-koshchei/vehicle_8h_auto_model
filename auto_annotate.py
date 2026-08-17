@@ -50,11 +50,68 @@ def detect(model, img, label: str):
     return bounding_boxes
 
 
+def split_image_quadrants(pil_img):
+    """
+    Splits a PIL image into 4 quadrants. Returns a list of
+    (quadrant_image, norm_x_offset, norm_y_offset) where the offsets are the
+    top-left corner of each quadrant in normalized (0-1) coordinates.
+    """
+    width, height = pil_img.size
+    mid_x = width // 2
+    mid_y = height // 2
+
+    return [
+        (pil_img.crop((0, 0, mid_x, mid_y)), 0.0, 0.0),
+        (pil_img.crop((mid_x, 0, width, mid_y)), 0.5, 0.0),
+        (pil_img.crop((0, mid_y, mid_x, height)), 0.0, 0.5),
+        (pil_img.crop((mid_x, mid_y, width, height)), 0.5, 0.5),
+    ]
+
+
+def remap_quadrant_label(
+    label: YoloLabel, offset_x: float, offset_y: float
+) -> YoloLabel:
+    """
+    Remaps a label detected in a quadrant (0.5-size image) back to full image
+    normalized coordinates.
+    """
+    return YoloLabel(
+        class_id=label.class_id,
+        norm_x_center=offset_x + label.norm_x_center * 0.5,
+        norm_y_center=offset_y + label.norm_y_center * 0.5,
+        norm_width=label.norm_width * 0.5,
+        norm_height=label.norm_height * 0.5,
+    )
+
+
+def detect_label_quadrants(model, pil_img, label: str) -> list[YoloLabel]:
+    """
+    Runs detection on each of the 4 quadrants of the image so small objects are
+    relatively larger to the model, returning labels in full image normalized
+    coordinates. Duplicates spanning quadrant boundaries are merged later.
+    """
+    all_detected = []
+    for quadrant, offset_x, offset_y in split_image_quadrants(pil_img):
+        for x, y, w, h in detect(model, quadrant, label):
+            all_detected.append(
+                remap_quadrant_label(
+                    YoloLabel(
+                        class_id=0, norm_x_center=x, norm_y_center=y, norm_width=w, norm_height=h
+                    ),
+                    offset_x,
+                    offset_y,
+                )
+            )
+    return all_detected
+
+
 def auto_annotate(
     frames_directory_path: str,
     labels_directory_path: str,
     label: str,
     class_id: int = 0,
+    split_quadrants: bool = False,
+    name_prefix: str | None = None,
 ):
     if not os.path.isdir(frames_directory_path):
         raise ValueError(f"Not a valid directory: {frames_directory_path}")
@@ -72,6 +129,9 @@ def auto_annotate(
     model.compile()
 
     for frame_name in sorted(os.listdir(frames_directory_path)):
+        if name_prefix is not None and not frame_name.startswith(name_prefix):
+            continue
+
         frame_path = os.path.join(frames_directory_path, frame_name)
         if not os.path.isfile(frame_path):
             continue
@@ -94,10 +154,19 @@ def auto_annotate(
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             pil_img = Image.fromarray(img_rgb)
 
-            detected_labels = [
-                YoloLabel(class_id=class_id, norm_x_center=x, norm_y_center=y, norm_width=w, norm_height=h)
-                for x, y, w, h in detect(model, pil_img, label)
-            ]
+            if split_quadrants:
+                from merge_labels import filter_same_boxes_for_labels
+
+                detected_labels = filter_same_boxes_for_labels(
+                    img, detect_label_quadrants(model, pil_img, label), 0.5
+                )
+            else:
+                detected_labels = [
+                    YoloLabel(class_id=class_id, norm_x_center=x, norm_y_center=y, norm_width=w, norm_height=h)
+                    for x, y, w, h in detect(model, pil_img, label)
+                ]
+            for detected_label in detected_labels:
+                detected_label.class_id = class_id
 
             label_name = os.path.splitext(frame_name)[0] + ".txt"
             label_path = os.path.join(labels_directory_path, label_name)
@@ -122,9 +191,19 @@ def main():
         "--label", required=True, help="Object label to detect (e.g. 'car')"
     )
     parser.add_argument("--class-id", type=int, default=0, help="YOLO class id (default: 0)")
+    parser.add_argument(
+        "--split-quadrants",
+        action="store_true",
+        help="Split each frame into 4 quadrants before detection to improve small object recall",
+    )
+    parser.add_argument(
+        "--name-prefix",
+        default=None,
+        help="Only process frames whose filename starts with this prefix",
+    )
     args = parser.parse_args()
 
-    auto_annotate(args.frames_dir, args.labels_dir, args.label, args.class_id)
+    auto_annotate(args.frames_dir, args.labels_dir, args.label, args.class_id, args.split_quadrants, args.name_prefix)
 
 
 if __name__ == "__main__":

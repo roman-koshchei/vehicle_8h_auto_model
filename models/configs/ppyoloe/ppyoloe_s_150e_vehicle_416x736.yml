@@ -16,7 +16,6 @@ TrainReader:
   sample_transforms:
     - Decode: {}
     - RandomDistort: {}
-    - RandomHSV: {hgain: 0.015, sgain: 0.7, vgain: 0.4, is_bgr: True}
     - RandomExpand: {fill_value: [123.675, 116.28, 103.53]}
     - RandomCrop: {}
     - RandomFlip: {}
