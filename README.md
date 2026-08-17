@@ -10,6 +10,10 @@ Pipeline:
 4. Convert dataset to COCO format
 5. Train PP-YOLO model on it
 
+Extra steps for V2:
+
+- Hand review
+
 Run split:
 
 ```bash
@@ -32,16 +36,52 @@ Convert to COCO:
 
 ```bash
 uv run convert_to_coco.py --labels-dir "./dataset/train/labels" --images-dir "./dataset/train/frames" --destination-dir "./dataset/coco/train" --class-names "vehicle"
+uv run convert_to_coco.py --labels-dir "./dataset/eval/labels" --images-dir "./dataset/eval/frames" --destination-dir "./dataset/coco/eval" --class-names "vehicle"
+```
+
+Run metrics:
+
+```bash
+python eval_metrics.py --labels-dir "./dataset/eval/labels" --bbox-json "eval_bbox/bbox.json" --coco-anno "./dataset/coco/eval/annotations/instances.json"
 ```
 
 ## Speedrun marks:
 
-| Step                                      | Time mark in 8 hours |
-| ----------------------------------------- | -------------------- |
-| Split into frames complete                | 20 minutes           |
-| Auto annotations complete                 | 2 hours 20 minutes   |
-| Functional cleanup, ready to run training | 3 hours 50 minutes   |
-| First training run complete               | 5 hours 15 minutes   |
+| Step                                                | Time mark in 8 hours |
+| --------------------------------------------------- | -------------------- |
+| Split into frames complete                          | 20 minutes           |
+| Auto annotations complete                           | 2 hours 20 minutes   |
+| Functional cleanup, ready to run training           | 3 hours 50 minutes   |
+| First training run complete                         | 5 hours 15 minutes   |
+| Second training run with human corrections complete | 7 hours 40 minutes   |
+
+## Model metrics
+
+Metrics: Detection rate = TP / (TP + FN), Precision = TP / (TP + FP), False alarms / min = FP × 60 / N_frames, Time to first detection. Assumptions: distance = 4.5 m (car length) × 819.2 px (focal) / max(box w,h), IoU ≥ 0.5, 90 eval frames @2fps. Computed with `eval_metrics.py` (thr 0.3).
+
+### V1 — Almost no human cleanup, only big misses
+
+| Metric                  | 0–200 m | 200–400 m |
+| ----------------------- | ------- | --------- |
+| Detection rate          | 0.684   | 0.000     |
+| Precision               | 0.187   | 0.000     |
+| False alarms / min      | 371     | 2.0       |
+| Time to first detection | 0.0 s   | inf       |
+
+### V2 — Hand-cleaned labels
+
+| Metric                  | 0–200 m | 200–400 m |
+| ----------------------- | ------- | --------- |
+| Detection rate          | 0.888   | 0.011     |
+| Precision               | 0.316   | 0.067     |
+| False alarms / min      | 240     | 18.7      |
+| Time to first detection | 0.0 s   | 6.0 s     |
+
+GT distances span 16–720 m: 187 boxes in 0–200 m, 175 in 200–400 m, 113 beyond 400 m. Both models detect close vehicles well; both fail on the far band (v2 slightly better).
+
+Annotated eval video: `models/v2_annotated_2fps.mp4` (v2 model, thr 0.3).
+
+**Extra eval video:** [Drone footage of traffic on a highway interchange](https://www.pexels.com/video/drone-footage-of-traffic-on-a-highway-interchange-12477079/) (Pexels), `dataset/eval/videos/12477079-hd_1280_720_30fps.mp4` (1280×720, ~30fps, 81.5 s); frames split at 2fps, the first 29 frames are labeled for eval at bigger distance.
 
 ## Notes
 
@@ -69,7 +109,7 @@ One of the improvements was to take frame from far above, split it into 4 and ru
 
 I also inflated small boxes by 10% to better contain small objects.
 
-**NOTE**: after first training run I decided to try to do real clean up by hand to compare results, because mAP wasn't super great (but it's also because amount of data is small).
+**NOTE**: after first training run I decided to try to do clean up by hand to compare results.
 
 ### Model
 
@@ -104,38 +144,3 @@ uv pip install --python ".venv\Scripts\python.exe" scikit-learn "numba==0.56.4"
 # sanity test: expect 7/7 OK
 .venv\Scripts\python.exe ppdet/modeling/tests/test_architectures.py
 ```
-
-## Model metrics
-
-Metrics for the v1 model (`models/v1.pdparams`, same weights as `output/best_model.pdparams`), computed with `eval_metrics.py`:
-
-```bash
-python eval_metrics.py --labels-dir "vehicle_8h_auto_model/dataset/eval/labels" --bbox-json "eval_bbox/bbox.json"
-```
-
-Assumptions: pinhole distance `distance = 4.5 m (car length) × focal_px / max(box w,h)`; FOV 84° diagonal = 76°H (README "FOV assumptions"), focal = 819.2 px; IoU ≥ 0.5 matching; 61 eval frames @2fps (30.5 s clip); N_frames = 61.
-
-Metrics definitions:
-
-- Detection rate = TP / (TP + FN)
-- Precision = TP / (TP + FP)
-- False alarms / min = FP × 60 / N_frames
-- Time to first detection = seconds
-
-| Metric                  | 0–200 m         | 200–400 m |
-| ----------------------- | --------------- | --------- |
-| Detection rate          | 0.771 (thr 0.3) | N/A       |
-| Precision               | 0.231 (thr 0.3) | N/A       |
-| False alarms / min      | 419 (thr 0.3)   | N/A       |
-| Time to first detection | 0.0 s (thr 0.3) | N/A       |
-
-GT distances span 16–80 m, so all ground truth falls in the 0–200 m band; the 200–400 m band has no GT samples and is reported as N/A. A PR curve across confidence thresholds (0.1 / 0.2 / 0.3 / 0.5) is available from the script.
-
-**Extra eval video:** [Drone footage of traffic on a highway interchange](https://www.pexels.com/video/drone-footage-of-traffic-on-a-highway-interchange-12477079/) (Pexels), downloaded to `dataset/eval/videos/12477079-hd_1280_720_30fps.mp4` (1280×720, ~30fps, 81.5 s); frames split at 2fps into `dataset/eval/frames/` (`12477079-hd_1280_720_30fps_%04d.png`, 163 frames).
-
-| Thr | Detection rate | Precision | FA/min  | Time to first detection (s) |
-| --- | -------------- | --------- | ------- | --------------------------- |
-| 0.1 | 0.892          | 0.054     | 2569.18 | 0.0                         |
-| 0.2 | 0.831          | 0.129     | 912.79  | 0.0                         |
-| 0.3 | 0.771          | 0.231     | 419.02  | 0.0                         |
-| 0.5 | 0.355          | 0.360     | 103.28  | 1.0                         |

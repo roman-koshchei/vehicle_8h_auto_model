@@ -3,20 +3,20 @@ num_classes: 1
 
 TrainDataset:
   name: COCODataSet
-  image_dir: train/coco/train/images
-  anno_path: train/coco/train/annotations/instances.json
+  image_dir: coco/train/images
+  anno_path: coco/train/annotations/instances.json
   dataset_dir: ./vehicle_8h_auto_model/dataset
   data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd']
   allow_empty: true
 
 EvalDataset:
   name: COCODataSet
-  image_dir: eval/coco/valid/images
-  anno_path: eval/coco/valid/annotations/instances.json
+  image_dir: coco/eval/images
+  anno_path: coco/eval/annotations/instances.json
   dataset_dir: ./vehicle_8h_auto_model/dataset
   allow_empty: true
 
 TestDataset:
   name: ImageFolder
-  anno_path: eval/coco/valid/annotations/instances.json
+  anno_path: coco/eval/annotations/instances.json
   dataset_dir: ./vehicle_8h_auto_model/dataset

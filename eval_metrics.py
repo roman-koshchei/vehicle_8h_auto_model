@@ -10,7 +10,6 @@ FOV_H_DEG = 76.0
 CAR_LENGTH_M = 4.5
 FOCAL_PX = (IMAGE_W / 2.0) / math.tan(math.radians(FOV_H_DEG / 2.0))
 IOU_THRESHOLD = 0.5
-N_FRAMES = 61
 FPS_SAMPLE = 2.0
 BANDS = [(0.0, 200.0, "0-200 m"), (200.0, 400.0, "200-400 m")]
 
@@ -21,10 +20,21 @@ def estimate_distance(px_size):
     return CAR_LENGTH_M * FOCAL_PX / px_size
 
 
-def load_ground_truth(labels_dir):
+def load_image_order(coco_anno_path):
+    data = json.load(open(coco_anno_path))
+    order = {}
+    for im in data["images"]:
+        order[os.path.splitext(im["file_name"])[0]] = im["id"]
+    return order
+
+
+def load_ground_truth(labels_dir, image_order):
     gt = []
     for path in sorted(glob.glob(os.path.join(labels_dir, "*.txt"))):
-        frame = int(os.path.basename(path).rsplit("_", 1)[1].split(".")[0])
+        stem = os.path.splitext(os.path.basename(path))[0]
+        image_id = image_order.get(stem)
+        if image_id is None:
+            continue
         for line in open(path):
             parts = line.split()
             if len(parts) < 5:
@@ -34,7 +44,7 @@ def load_ground_truth(labels_dir):
             y = (cy - h / 2.0) * IMAGE_H
             bw = w * IMAGE_W
             bh = h * IMAGE_H
-            gt.append({"frame": frame, "box": [x, y, bw, bh]})
+            gt.append({"image_id": image_id, "box": [x, y, bw, bh]})
     return gt
 
 
@@ -43,7 +53,7 @@ def load_detections(bbox_json_path):
     out = []
     for d in dets:
         x, y, w, h = d["bbox"]
-        out.append({"frame": d["image_id"], "score": d["score"], "box": [x, y, w, h]})
+        out.append({"image_id": d["image_id"], "score": d["score"], "box": [x, y, w, h]})
     return out
 
 
@@ -77,7 +87,7 @@ def match(dets, gt, threshold):
         best_iou = 0.0
         best_gt = None
         for gi, g in enumerate(gt):
-            if g["frame"] != d["frame"] or gi in matched_gt:
+            if g["image_id"] != d["image_id"] or gi in matched_gt:
                 continue
             o = iou(d["box"], g["box"])
             if o > best_iou:
@@ -95,26 +105,35 @@ def det_dist(d):
     return estimate_distance(max(d["box"][2], d["box"][3]))
 
 
-def band_of(dist):
-    for lo, hi, name in BANDS:
-        if lo < dist <= hi:
-            return name
-    return "outside"
+def video_of(image_id, image_order):
+    stem = [k for k, v in image_order.items() if v == image_id]
+    if not stem:
+        return None
+    return stem[0].rsplit("_", 2)[0]
+
+
+def time_of(image_id, image_order):
+    stem = [k for k, v in image_order.items() if v == image_id][0]
+    idx = int(stem.rsplit("_", 1)[1])
+    return (idx - 1) / FPS_SAMPLE
 
 
 def main():
     parser = argparse.ArgumentParser(description="Distance-band metrics for the v1 model")
     parser.add_argument("--labels-dir", default="dataset/eval/labels")
     parser.add_argument("--bbox-json", default="eval_bbox/bbox.json")
+    parser.add_argument("--coco-anno", default="dataset/coco/eval/annotations/instances.json")
     parser.add_argument("--thresholds", type=float, nargs="+", default=[0.1, 0.2, 0.3, 0.5])
     args = parser.parse_args()
 
-    gt = load_ground_truth(args.labels_dir)
+    image_order = load_image_order(args.coco_anno)
+    n_frames = len(image_order)
+    gt = load_ground_truth(args.labels_dir, image_order)
     dets = load_detections(args.bbox_json)
 
     print(f"Assumptions: car length={CAR_LENGTH_M}m, FOV={FOV_DIAG_DEG}deg diag "
           f"({FOV_H_DEG}deg H), focal={FOCAL_PX:.1f}px, IoU>={IOU_THRESHOLD}, "
-          f"{len(args.thresholds)} score thresholds, N_frames={N_FRAMES} @{FPS_SAMPLE:g}fps")
+          f"{len(args.thresholds)} score thresholds, N_frames={n_frames} @{FPS_SAMPLE:g}fps")
     print(f"GT boxes: {len(gt)}  Detections: {len(dets)}")
     print()
 
@@ -142,9 +161,10 @@ def main():
             band_fn = len(band_gt) - band_tp
             det_rate = band_tp / (band_tp + band_fn) if (band_tp + band_fn) else float("nan")
             precision = band_tp / (band_tp + band_fp) if (band_tp + band_fp) else float("nan")
-            fa_min = band_fp * 60.0 / N_FRAMES
-            tp_frames = sorted({d["frame"] for d, gi in tp_dets if id(gt[gi]) in gt_ids})
-            t2f = (tp_frames[0] - 1) / FPS_SAMPLE if tp_frames else float("inf")
+            fa_min = band_fp * 60.0 / n_frames
+            band_tp_times = [time_of(d["image_id"], image_order)
+                             for d, gi in tp_dets if id(gt[gi]) in gt_ids]
+            t2f = min(band_tp_times) if band_tp_times else float("inf")
             t2f_s = f"{t2f:.1f}" if math.isfinite(t2f) else "inf"
             print(f"{thr:>4.1f} {det_rate:>9.3f} {precision:>9.3f} {fa_min:>9.2f} {t2f_s:>8}")
 
