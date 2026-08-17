@@ -115,6 +115,8 @@ Annotated eval videos (thr 0.2), as reference of results:
 It's an HD video from drone, so it's an 16:9 camera, likely from Mavic. So diagonal FOV would be around 84 degree.
 For a 16:9 video image, an 84° diagonal FOV corresponds approximately to: 76° horizontal × 48° vertical.
 
+Distance to a vehicle is estimated from its box size using the pinhole model: `distance = vehicle_length × focal_px / max(box w,h)`, with focal = 819.2 px (from the 76° horizontal FOV at 1280 px width). This assumes the vehicle's length (along its long axis) projects onto the box's larger dimension, and uses an average car length of 4.5 m.
+
 ### Auto annotations
 
 To review the dataset I use my own tool called Dataset GUI which I use to edit my datasets: ![Dataset GUI](./media/gui.png)
