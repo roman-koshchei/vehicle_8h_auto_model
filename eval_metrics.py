@@ -11,7 +11,7 @@ CAR_LENGTH_M = 4.5
 FOCAL_PX = (IMAGE_W / 2.0) / math.tan(math.radians(FOV_H_DEG / 2.0))
 IOU_THRESHOLD = 0.5
 FPS_SAMPLE = 2.0
-BANDS = [(0.0, 200.0, "0-200 m"), (200.0, 400.0, "200-400 m")]
+BANDS = [(0.0, 200.0, "0-200 m"), (200.0, 400.0, "200-400 m"), (400.0, float("inf"), "400+ m")]
 
 
 def estimate_distance(px_size):

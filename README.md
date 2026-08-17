@@ -57,29 +57,54 @@ python eval_metrics.py --labels-dir "./dataset/eval/labels" --bbox-json "eval_bb
 
 ## Model metrics
 
-Metrics: Detection rate = TP / (TP + FN), Precision = TP / (TP + FP), False alarms / min = FP × 60 / N_frames, Time to first detection. Assumptions: distance = 4.5 m (car length) × 819.2 px (focal) / max(box w,h), IoU ≥ 0.5, 90 eval frames @2fps. Computed with `eval_metrics.py` (thr 0.3).
+Metrics: Detection rate = TP / (TP + FN), Precision = TP / (TP + FP), False alarms / min = FP × 60 / N_frames, Time to first detection. Assumptions: distance = 4.5 m (car length) × 819.2 px (focal) / max(box w,h), IoU ≥ 0.5, 90 eval frames @2fps. Computed with `eval_metrics.py` across confidence thresholds.
 
 ### V1 — Almost no human cleanup, only big misses
 
-| Metric                  | 0–200 m | 200–400 m |
-| ----------------------- | ------- | --------- |
-| Detection rate          | 0.684   | 0.000     |
-| Precision               | 0.187   | 0.000     |
-| False alarms / min      | 371     | 2.0       |
-| Time to first detection | 0.0 s   | inf       |
+**0–200 m (187 GT boxes):**
+
+| Thr | Detection rate | Precision | FA/min | Time to first detection (s) |
+| --- | -------------- | --------- | ------ | --------------------------- |
+| 0.01 | 0.888 | 0.006 | 17678.0 | 0.0 |
+| 0.05 | 0.818 | 0.017 | 5745.3 | 0.0 |
+| 0.10 | 0.791 | 0.039 | 2445.3 | 0.0 |
+| 0.20 | 0.738 | 0.101 | 822.7 | 0.0 |
+
+**200–400 m (175 GT boxes):**
+
+| Thr | Detection rate | Precision | FA/min | Time to first detection (s) |
+| --- | -------------- | --------- | ------ | --------------------------- |
+| 0.01 | 0.006 | 0.003 | 210.7 | 12.0 |
+| 0.05 | 0.000 | 0.000 | 90.7 | inf |
+| 0.10 | 0.000 | 0.000 | 38.7 | inf |
+| 0.20 | 0.000 | 0.000 | 14.7 | inf |
 
 ### V2 — Hand-cleaned labels
 
-| Metric                  | 0–200 m | 200–400 m |
-| ----------------------- | ------- | --------- |
-| Detection rate          | 0.888   | 0.011     |
-| Precision               | 0.316   | 0.067     |
-| False alarms / min      | 240     | 18.7      |
-| Time to first detection | 0.0 s   | 6.0 s     |
+**0–200 m (187 GT boxes):**
 
-GT distances span 16–720 m: 187 boxes in 0–200 m, 175 in 200–400 m, 113 beyond 400 m. Both models detect close vehicles well; both fail on the far band (v2 slightly better).
+| Thr | Detection rate | Precision | FA/min | Time to first detection (s) |
+| --- | -------------- | --------- | ------ | --------------------------- |
+| 0.01 | 0.941 | 0.008 | 14946.0 | 0.0 |
+| 0.05 | 0.941 | 0.024 | 4686.0 | 0.0 |
+| 0.10 | 0.914 | 0.072 | 1466.7 | 0.0 |
+| 0.20 | 0.914 | 0.194 | 474.0 | 0.0 |
 
-Annotated eval video: `models/v2_annotated_2fps.mp4` (v2 model, thr 0.3).
+**200–400 m (175 GT boxes):**
+
+| Thr | Detection rate | Precision | FA/min | Time to first detection (s) |
+| --- | -------------- | --------- | ------ | --------------------------- |
+| 0.01 | 0.366 | 0.015 | 2873.3 | 0.0 |
+| 0.05 | 0.297 | 0.028 | 1209.3 | 0.0 |
+| 0.10 | 0.200 | 0.061 | 360.0 | 0.5 |
+| 0.20 | 0.046 | 0.062 | 80.0 | 1.0 |
+
+GT distances span 16–720 m: 187 boxes in 0–200 m, 175 in 200–400 m, 113 beyond 400 m (not evaluated). Both models detect close vehicles well; v2 detects far vehicles only at low confidence (0.366 detection rate in 200–400 m at thr 0.01), v1 essentially never.
+
+Annotated eval videos (thr 0.2), as reference of results:
+
+- Original eval video: [v1 annotated](models/v1_annotated_2fps.mp4) | [v2 annotated](models/v2_annotated_2fps.mp4)
+- Far-distance eval video: [v1 annotated](models/v1_annotated_far_2fps.mp4) | [v2 annotated](models/v2_annotated_far_2fps.mp4)
 
 **Extra eval video:** [Drone footage of traffic on a highway interchange](https://www.pexels.com/video/drone-footage-of-traffic-on-a-highway-interchange-12477079/) (Pexels), `dataset/eval/videos/12477079-hd_1280_720_30fps.mp4` (1280×720, ~30fps, 81.5 s); frames split at 2fps, the first 29 frames are labeled for eval at bigger distance.
 
